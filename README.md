@@ -1,4 +1,4 @@
-# 🚀  RCEMaster v3.1 - Ultimate Edition
+# 🚀  RCEMaster v5.1 - 100% Complete, Unified & Ultra-Powered
 
 **Ultimate Adaptive Remote Code Execution Engine.**
 
@@ -128,6 +128,8 @@ rcemaster -u https://target.com -o rce_results.json
 
 
 Stealth Mode (with delay)
+
+rcemaster -f targets.txt -delay 500ms -o results.json
 
 rcemaster -u https://target.com -delay 100ms
 
